@@ -51,6 +51,9 @@ class SearchMovies:
         transformed_text = reduce(lambda x, y: y[1](x), transforms, text)
         return transformed_text
 
+    def __tokenize_text(self, text):
+        return [x for x in text.split(" ") if x]
+
     def query(self, query, limit=5, debug=False):
         movie = namedtuple("Movie", ["id", "title"])
         results = []
@@ -58,9 +61,23 @@ class SearchMovies:
         for id, item in enumerate(self.movies):
             if debug and id % 100 == 0:
                 print(item)
-            if self.__transform_text(query) in self.__transform_text(item["title"]):
-                if debug:
-                    print(f"Found {query} in {item["title"]}")
+
+            title = item["title"]
+
+            query_tokens = self.__tokenize_text(self.__transform_text(query))
+            title_tokens = self.__tokenize_text(self.__transform_text(title))
+
+            any_match = False
+            for query_token in query_tokens:
+                for title_token in title_tokens:
+                    if query_token in title_token:
+                        any_match = True
+                        if debug:
+                            print(f"Found {query} in {item["title"]}")
+                        break
+                if any_match:
+                    break
+            if any_match:
                 results.append(movie(item["id"], item["title"]))
         results.sort(key=lambda x: x[0])
         return [res[1] for res in results][:limit]

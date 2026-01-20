@@ -4,6 +4,7 @@ import json
 from collections import namedtuple
 import string
 from functools import reduce
+from nltk.stem import PorterStemmer
 
 
 def remove_punctuation(text):
@@ -25,9 +26,12 @@ def remove_punctuation(text):
 
 class SearchMovies:
 
-    def __init__(self, filepath):
+    def __init__(self, filepath, stopwords_fp):
         self.filepath = filepath
-        self.movies = None
+        self.stopwords_fp = stopwords_fp
+        self.stopwords = set()
+        self.movies = {}
+        self.stemmer = PorterStemmer()
 
     def __enter__(self):
         with open(self.filepath) as file:
@@ -36,7 +40,11 @@ class SearchMovies:
             except Exception:
                 return
             self.movies = movies_json["movies"]
-            return self
+
+        with open(self.stopwords_fp) as file:
+            for line in file.read().splitlines():
+                self.stopwords.add(line)
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         pass
@@ -46,6 +54,13 @@ class SearchMovies:
         transforms = [
             ("lowercase", lambda x: x.lower()),
             ("remove_punctuation", remove_punctuation),
+            ("tokenize_text", self.__tokenize_text),
+            (
+                "remove_stopwords",
+                lambda tokens: [self.__remove_stopwords(text) for text in tokens],
+            ),
+            ("remove_empty", lambda tokens: [token for token in tokens if token]),
+            ("stem", lambda tokens: [self.stemmer.stem(token) for token in tokens]),
         ]
 
         transformed_text = reduce(lambda x, y: y[1](x), transforms, text)
@@ -54,18 +69,21 @@ class SearchMovies:
     def __tokenize_text(self, text):
         return [x for x in text.split(" ") if x]
 
+    def __remove_stopwords(self, text):
+        return text if text not in self.stopwords else ""
+
     def query(self, query, limit=5, debug=False):
         movie = namedtuple("Movie", ["id", "title"])
         results = []
 
+        query_tokens = self.__transform_text(query)
+        # print(query_tokens)
+
         for id, item in enumerate(self.movies):
             if debug and id % 100 == 0:
                 print(item)
-
             title = item["title"]
-
-            query_tokens = self.__tokenize_text(self.__transform_text(query))
-            title_tokens = self.__tokenize_text(self.__transform_text(title))
+            title_tokens = self.__transform_text(title)
 
             any_match = False
             for query_token in query_tokens:

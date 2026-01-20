@@ -22,7 +22,12 @@ def main() -> None:
     match args.command:
         case "search":
             print(f"Searching for: {args.query}")
-            with SearchMovies("data/movies.json") as keywordSearch:
+            with SearchMovies(
+                filepath="data/movies.json",
+                stopwords_fp="data/stopwords.txt",
+            ) as keywordSearch:
+                print(f"Stopwords: ")
+                print(len(keywordSearch.stopwords))
                 query_result = keywordSearch.query(args.query, 5)
                 for i, title in enumerate(query_result):
                     print(f"{i+1}. {title}")

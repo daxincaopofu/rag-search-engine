@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 
 import json
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 import string
 from functools import reduce
 from nltk.stem import PorterStemmer
+from typing import List
+import pickle
+import os
 
 
 def remove_punctuation(text):
@@ -24,12 +27,103 @@ def remove_punctuation(text):
     return text.translate(translator)
 
 
-class SearchMovies:
+class InvertedIndex:
 
-    def __init__(self, filepath, stopwords_fp):
-        self.filepath = filepath
-        self.stopwords_fp = stopwords_fp
+    def __init__(self, cache_dir: str = "./cache"):
+        self.cache_dir = cache_dir
+        self.index = defaultdict(list)
+        self.docmap = defaultdict()
         self.stopwords = set()
+        self.stemmer = PorterStemmer()
+
+    def tokenize_query(self, query: str) -> List[str]:
+        return self.__transform_text(query)
+
+    def __transform_text(self, text: str) -> List[str]:
+        # Text Pre-processing
+        transforms = [
+            ("lowercase", lambda x: x.lower()),
+            ("remove_punctuation", remove_punctuation),
+            ("tokenize_text", self.__tokenize_text),
+            (
+                "remove_stopwords",
+                lambda tokens: [self.__remove_stopwords(text) for text in tokens],
+            ),
+            ("remove_empty", lambda tokens: [token for token in tokens if token]),
+            ("stem", lambda tokens: [self.stemmer.stem(token) for token in tokens]),
+        ]
+
+        transformed_text = reduce(lambda x, y: y[1](x), transforms, text)
+        return transformed_text  # pyright: ignore[reportReturnType]
+
+    def __tokenize_text(self, text: str) -> List[str]:
+        return [x for x in text.split(" ") if x]
+
+    def __remove_stopwords(self, text: str) -> str:
+        return text if text not in self.stopwords else ""
+
+    def __add_document(self, doc_id: int, text: str) -> None:
+        tokens = self.__transform_text(text)
+        for tok in tokens:
+            self.index[tok].append(doc_id)
+
+    def get_documents(self, term: str) -> List[int]:
+        doc_ids = self.index.get(term, [])
+        return sorted(doc_ids)
+
+    def load(self) -> None:
+        try:
+            with open(f"{self.cache_dir}/index.pkl", "rb") as file:
+                self.index = pickle.load(file)
+            with open(f"{self.cache_dir}/docmap.pkl", "rb") as file:
+                self.docmap = pickle.load(file)
+            return
+        except Exception as e:
+            print("Unable to use cache")
+            raise (e)
+
+    def build(self, filepath: str, stopwords_filepath: str) -> None:
+
+        try:
+            with open(stopwords_filepath) as file:
+                for line in file.read().splitlines():
+                    self.stopwords.add(line)
+        except Exception as e:
+            print(f"Unable to read in stopwords from {stopwords_filepath}")
+            print(e)
+
+        with open(filepath) as file:
+            try:
+                movies = json.load(file)["movies"]
+            except Exception:
+                return
+
+            for item in movies:
+                self.__add_document(
+                    int(item["id"]), item["title"] + " " + item["description"]
+                )
+                self.docmap[int(item["id"])] = item
+
+    def save(self) -> None:
+        os.makedirs(self.cache_dir, exist_ok=True)
+
+        if self.index:
+            with open(f"{self.cache_dir}/index.pkl", "wb") as file:
+                pickle.dump(self.index, file)
+        if self.docmap:
+            with open(f"{self.cache_dir}/docmap.pkl", "wb") as file:
+                pickle.dump(self.docmap, file)
+
+
+class SearchMovies:
+    """
+    MVP implementation without indexing (very inefficient as we have to scan through the documents each time)
+    """
+
+    def __init__(self, filepath: str, stopwords_filepath: str):
+        self.filepath = filepath
+        self.stopwords_fp = stopwords_filepath
+        self.stopword = set([])
         self.movies = {}
         self.stemmer = PorterStemmer()
 
@@ -50,7 +144,7 @@ class SearchMovies:
         pass
 
     def __transform_text(self, text):
-        # Transform query and title
+        # Text Pre-processing
         transforms = [
             ("lowercase", lambda x: x.lower()),
             ("remove_punctuation", remove_punctuation),

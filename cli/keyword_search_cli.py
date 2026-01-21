@@ -7,7 +7,7 @@ from pathlib import Path
 # Ensure project root is on sys.path so the 'search' package can be imported when running this script directly
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from search.keyword_search import SearchMovies
+from search.keyword_search import SearchMovies, InvertedIndex
 
 
 def main() -> None:
@@ -17,20 +17,32 @@ def main() -> None:
     search_parser = subparsers.add_parser("search", help="Search movies using BM25")
     search_parser.add_argument("query", type=str, help="Search query")
 
+    search_parser = subparsers.add_parser("build", help="Build movie index")
+
     args = parser.parse_args()
+    MovieIndex = InvertedIndex()
 
     match args.command:
         case "search":
+            print("Loading movie index")
+            MovieIndex.load()
             print(f"Searching for: {args.query}")
-            with SearchMovies(
-                filepath="data/movies.json",
-                stopwords_fp="data/stopwords.txt",
-            ) as keywordSearch:
-                print(f"Stopwords: ")
-                print(len(keywordSearch.stopwords))
-                query_result = keywordSearch.query(args.query, 5)
-                for i, title in enumerate(query_result):
-                    print(f"{i+1}. {title}")
+            results = []
+            for tok in MovieIndex.tokenize_query(args.query):
+                results += MovieIndex.get_documents(tok)
+                if len(results) >= 5:
+                    for docid in results[:5]:
+                        document = MovieIndex.docmap.get(docid, {})
+                        print(document.get("title"), document.get("id"))
+                    exit(0)
+            print("Not enough results found")
+            exit(1)
+
+        case "build":
+            print(f"Building movie index")
+            MovieIndex.build("data/movies.json", "data/stopwords.txt")
+            print(f"Saving index to cache: {len(MovieIndex.index)} documents")
+            MovieIndex.save()
         case _:
             parser.print_help()
 

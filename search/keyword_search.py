@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import json
-from collections import namedtuple, defaultdict
+from collections import namedtuple, defaultdict, Counter
 import string
 from functools import reduce
 from nltk.stem import PorterStemmer
@@ -32,7 +32,8 @@ class InvertedIndex:
     def __init__(self, cache_dir: str = "./cache"):
         self.cache_dir = cache_dir
         self.index = defaultdict(list)
-        self.docmap = defaultdict()
+        self.docmap = defaultdict(str)
+        self.term_frequencies = defaultdict(Counter)
         self.stopwords = set()
         self.stemmer = PorterStemmer()
 
@@ -66,10 +67,17 @@ class InvertedIndex:
         tokens = self.__transform_text(text)
         for tok in tokens:
             self.index[tok].append(doc_id)
+            self.term_frequencies[doc_id][tok] += 1
 
     def get_documents(self, term: str) -> List[int]:
         doc_ids = self.index.get(term, [])
         return sorted(doc_ids)
+
+    def get_tf(self, doc_id: int, term: str) -> int:
+        tokens = self.__tokenize_text(term)
+        if len(tokens) != 1:
+            raise ValueError("Term can only have a single token")
+        return self.term_frequencies.get(doc_id, Counter()).get(tokens[0], 0)
 
     def load(self) -> None:
         try:
@@ -77,6 +85,8 @@ class InvertedIndex:
                 self.index = pickle.load(file)
             with open(f"{self.cache_dir}/docmap.pkl", "rb") as file:
                 self.docmap = pickle.load(file)
+            with open(f"{self.cache_dir}/term_frequencies.pkl", "rb") as file:
+                self.term_frequencies = pickle.load(file)
             return
         except Exception as e:
             print("Unable to use cache")
@@ -113,6 +123,9 @@ class InvertedIndex:
         if self.docmap:
             with open(f"{self.cache_dir}/docmap.pkl", "wb") as file:
                 pickle.dump(self.docmap, file)
+        if self.term_frequencies:
+            with open(f"{self.cache_dir}/term_frequencies.pkl", "wb") as file:
+                pickle.dump(self.term_frequencies, file)
 
 
 class SearchMovies:

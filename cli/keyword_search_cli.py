@@ -19,6 +19,10 @@ def main() -> None:
 
     search_parser = subparsers.add_parser("build", help="Build movie index")
 
+    search_parser = subparsers.add_parser("tf", help="Searching using TF-IDF")
+    search_parser.add_argument("docId", type=str, help="Document Id")
+    search_parser.add_argument("term", type=str, help="Search term")
+
     args = parser.parse_args()
     MovieIndex = InvertedIndex()
 
@@ -37,6 +41,11 @@ def main() -> None:
                     exit(0)
             print("Not enough results found")
             exit(1)
+        case "tf":
+            print("Loading movie index")
+            MovieIndex.load()
+            print(f"Term Frequency for docId: {args.docId}, term: {args.term}")
+            print(MovieIndex.get_tf(int(args.docId), args.term))
 
         case "build":
             print(f"Building movie index")

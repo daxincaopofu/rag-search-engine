@@ -101,6 +101,14 @@ class InvertedIndex:
             print(f"Reverse-index for {term}: {self.index[toks[0]]}")
         return self.idfs.get(toks[0], 0.0)
 
+    def get_tfidf(self, doc_id: int, term: str) -> float:
+        tokens = self.__transform_text(term)
+        if len(tokens) != 1:
+            raise ValueError("Term can only have a single token")
+        tf = self.get_tf(doc_id, tokens[0])
+        idf = self.get_idf(tokens[0])
+        return tf * idf
+
     def load(self) -> None:
         try:
             with open(f"{self.cache_dir}/index.pkl", "rb") as file:

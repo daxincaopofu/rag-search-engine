@@ -22,10 +22,16 @@ def main() -> None:
     search_parser = subparsers.add_parser(
         "tf", help="Get the term frequency of a doc + term combination"
     )
-    search_parser.add_argument("docId", type=str, help="Document Id")
+    search_parser.add_argument("doc_id", type=int, help="Document Id")
     search_parser.add_argument("term", type=str, help="Search term")
 
     search_parser = subparsers.add_parser("idf", help="Get the IDF of a term")
+    search_parser.add_argument("term", type=str, help="Search term")
+
+    search_parser = subparsers.add_parser(
+        "tfidf", help="Get the TFIDF of a given document and term"
+    )
+    search_parser.add_argument("doc_id", type=int, help="Document Id")
     search_parser.add_argument("term", type=str, help="Search term")
 
     args = parser.parse_args()
@@ -40,8 +46,8 @@ def main() -> None:
             for tok in MovieIndex.transform_query(args.query):
                 results += MovieIndex.get_documents(tok)
                 if len(results) >= 5:
-                    for docid in results[:5]:
-                        document = MovieIndex.docmap.get(docid, {})
+                    for doc_id in results[:5]:
+                        document = MovieIndex.docmap.get(doc_id, {})
                         print(document.get("title"), document.get("id"))
                     exit(0)
             print("Not enough results found")
@@ -49,14 +55,22 @@ def main() -> None:
         case "tf":
             print("Loading movie index")
             MovieIndex.load()
-            print(f"Term Frequency for docId: {args.docId}, term: {args.term}")
-            print(MovieIndex.get_tf(int(args.docId), args.term))
+            print(f"Term Frequency for doc_id: {args.doc_id}, term: {args.term}")
+            print(MovieIndex.get_tf(int(args.doc_id), args.term))
 
         case "idf":
             print("Loading movie index")
             MovieIndex.load()
             print(
                 f"Inverse document frequency of '{args.term}': {MovieIndex.get_idf(args.term):.2f}"
+            )
+
+        case "tfidf":
+            print("Loading movie index")
+            MovieIndex.load()
+            tf_idf = MovieIndex.get_tfidf(args.doc_id, args.term)
+            print(
+                f"TF-IDF score of '{args.term}' in document '{args.doc_id}': {tf_idf:.2f}"
             )
 
         case "build":

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import json
+import math
 from collections import namedtuple, defaultdict, Counter
 import string
 from functools import reduce
@@ -30,11 +31,12 @@ def remove_punctuation(text):
 class InvertedIndex:
 
     def __init__(self, cache_dir: str = "./cache"):
-        self.cache_dir = cache_dir
-        self.index = defaultdict(list)
-        self.docmap = defaultdict(str)
-        self.term_frequencies = defaultdict(Counter)
-        self.stopwords = set()
+        self.cache_dir: str = cache_dir
+        self.index: dict[str, list] = defaultdict(list)
+        self.docmap: dict[int, dict] = defaultdict(dict)
+        self.idfs: dict[str, float] = defaultdict(float)
+        self.term_frequencies: dict[int, dict[str, int]] = defaultdict(Counter)
+        self.stopwords: set[str] = set()
         self.stemmer = PorterStemmer()
 
     def tokenize_query(self, query: str) -> List[str]:
@@ -63,6 +65,14 @@ class InvertedIndex:
     def __remove_stopwords(self, text: str) -> str:
         return text if text not in self.stopwords else ""
 
+    def __calculate_idfs(self) -> None:
+
+        total_doc_count = len(self.docmap)
+
+        for term, doc_list in self.docmap.items():
+
+            math.log((total_doc_count + 1) / (term_match_doc_count + 1))
+
     def __add_document(self, doc_id: int, text: str) -> None:
         tokens = self.__transform_text(text)
         for tok in tokens:
@@ -87,13 +97,12 @@ class InvertedIndex:
                 self.docmap = pickle.load(file)
             with open(f"{self.cache_dir}/term_frequencies.pkl", "rb") as file:
                 self.term_frequencies = pickle.load(file)
-            return
         except Exception as e:
             print("Unable to use cache")
             raise (e)
+        self.__calculate_idfs()
 
     def build(self, filepath: str, stopwords_filepath: str) -> None:
-
         try:
             with open(stopwords_filepath) as file:
                 for line in file.read().splitlines():
@@ -101,13 +110,11 @@ class InvertedIndex:
         except Exception as e:
             print(f"Unable to read in stopwords from {stopwords_filepath}")
             print(e)
-
         with open(filepath) as file:
             try:
                 movies = json.load(file)["movies"]
             except Exception:
                 return
-
             for item in movies:
                 self.__add_document(
                     int(item["id"]), item["title"] + " " + item["description"]
@@ -116,7 +123,6 @@ class InvertedIndex:
 
     def save(self) -> None:
         os.makedirs(self.cache_dir, exist_ok=True)
-
         if self.index:
             with open(f"{self.cache_dir}/index.pkl", "wb") as file:
                 pickle.dump(self.index, file)
@@ -136,7 +142,7 @@ class SearchMovies:
     def __init__(self, filepath: str, stopwords_filepath: str):
         self.filepath = filepath
         self.stopwords_fp = stopwords_filepath
-        self.stopword = set([])
+        self.stopwords: set[str] = set([])
         self.movies = {}
         self.stemmer = PorterStemmer()
 

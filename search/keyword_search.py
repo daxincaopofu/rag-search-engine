@@ -30,7 +30,7 @@ def remove_punctuation(text):
 
 class InvertedIndex:
 
-    def __init__(self, cache_dir: str = "./cache"):
+    def __init__(self, cache_dir: str = "./cache", debug: bool = False):
         self.cache_dir: str = cache_dir
         self.index: dict[str, list] = defaultdict(list)
         self.docmap: dict[int, dict] = defaultdict(dict)
@@ -38,8 +38,9 @@ class InvertedIndex:
         self.term_frequencies: dict[int, dict[str, int]] = defaultdict(Counter)
         self.stopwords: set[str] = set()
         self.stemmer = PorterStemmer()
+        self.debug = debug
 
-    def tokenize_query(self, query: str) -> List[str]:
+    def transform_query(self, query: str) -> List[str]:
         return self.__transform_text(query)
 
     def __transform_text(self, text: str) -> List[str]:
@@ -65,29 +66,40 @@ class InvertedIndex:
     def __remove_stopwords(self, text: str) -> str:
         return text if text not in self.stopwords else ""
 
-    def __calculate_idfs(self) -> None:
-
-        total_doc_count = len(self.docmap)
-
-        for term, doc_list in self.docmap.items():
-
-            math.log((total_doc_count + 1) / (term_match_doc_count + 1))
+    def __calculate_idfs(
+        self, index: dict[str, list[str]], docmap: dict[int, dict]
+    ) -> dict[str, float]:
+        total_doc_count = len(docmap)
+        idfs = defaultdict(float)
+        for term, doc_list in index.items():
+            term_match_doc_count = len(doc_list)
+            idfs[term] = math.log((total_doc_count + 1) / (term_match_doc_count + 1))
+        return idfs
 
     def __add_document(self, doc_id: int, text: str) -> None:
         tokens = self.__transform_text(text)
         for tok in tokens:
-            self.index[tok].append(doc_id)
             self.term_frequencies[doc_id][tok] += 1
+        for tok in list(set(tokens)):
+            self.index[tok].append(doc_id)
 
     def get_documents(self, term: str) -> List[int]:
         doc_ids = self.index.get(term, [])
         return sorted(doc_ids)
 
     def get_tf(self, doc_id: int, term: str) -> int:
-        tokens = self.__tokenize_text(term)
+        tokens = self.__transform_text(term)
         if len(tokens) != 1:
             raise ValueError("Term can only have a single token")
         return self.term_frequencies.get(doc_id, Counter()).get(tokens[0], 0)
+
+    def get_idf(self, term: str) -> float:
+        toks = self.__transform_text(term)
+        if len(toks) > 1:
+            raise ValueError("Token must be of length 1")
+        if self.debug:
+            print(f"Reverse-index for {term}: {self.index[toks[0]]}")
+        return self.idfs.get(toks[0], 0.0)
 
     def load(self) -> None:
         try:
@@ -100,7 +112,7 @@ class InvertedIndex:
         except Exception as e:
             print("Unable to use cache")
             raise (e)
-        self.__calculate_idfs()
+        self.idfs = self.__calculate_idfs(self.index, self.docmap)
 
     def build(self, filepath: str, stopwords_filepath: str) -> None:
         try:

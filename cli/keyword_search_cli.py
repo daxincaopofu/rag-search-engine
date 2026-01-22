@@ -19,12 +19,17 @@ def main() -> None:
 
     search_parser = subparsers.add_parser("build", help="Build movie index")
 
-    search_parser = subparsers.add_parser("tf", help="Searching using TF-IDF")
+    search_parser = subparsers.add_parser(
+        "tf", help="Get the term frequency of a doc + term combination"
+    )
     search_parser.add_argument("docId", type=str, help="Document Id")
     search_parser.add_argument("term", type=str, help="Search term")
 
+    search_parser = subparsers.add_parser("idf", help="Get the IDF of a term")
+    search_parser.add_argument("term", type=str, help="Search term")
+
     args = parser.parse_args()
-    MovieIndex = InvertedIndex()
+    MovieIndex = InvertedIndex(debug=False)
 
     match args.command:
         case "search":
@@ -32,7 +37,7 @@ def main() -> None:
             MovieIndex.load()
             print(f"Searching for: {args.query}")
             results = []
-            for tok in MovieIndex.tokenize_query(args.query):
+            for tok in MovieIndex.transform_query(args.query):
                 results += MovieIndex.get_documents(tok)
                 if len(results) >= 5:
                     for docid in results[:5]:
@@ -46,6 +51,13 @@ def main() -> None:
             MovieIndex.load()
             print(f"Term Frequency for docId: {args.docId}, term: {args.term}")
             print(MovieIndex.get_tf(int(args.docId), args.term))
+
+        case "idf":
+            print("Loading movie index")
+            MovieIndex.load()
+            print(
+                f"Inverse document frequency of '{args.term}': {MovieIndex.get_idf(args.term):.2f}"
+            )
 
         case "build":
             print(f"Building movie index")
